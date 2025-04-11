@@ -1,14 +1,21 @@
-use mdbook_chm::{context_to_chm, get_context};
+use mdbook_chm::mdbook::{MdBookChm, context};
 
 fn main() {
-    let Some(ctx) = get_context() else {
+    let Some(ctx) = context() else {
         eprintln!("Could not get context from stdin. Is this a valid mdbook build?");
         std::process::exit(1);
     };
 
-    let builder = context_to_chm(ctx);
+    let builder = match ctx.as_chm() {
+        Ok(builder) => builder,
+        Err(e) => {
+            eprintln!("Could not process book: {e}");
+            std::process::exit(1);
+        }
+    };
+
     if let Err(e) = builder.compile() {
-        eprintln!("Could not compile CHM: {e}");
+        eprintln!("Error compiling CHM: {e}");
         std::process::exit(1);
     }
 

@@ -1,5 +1,8 @@
 //! The help table of contents (.hhc) file is an HTML file that contains the topic titles for your table of contents.
 //! When a user opens the table of contents in a compiled help file (or on a Web page) and clicks a topic title, the HTML file associated with that title will open.
+use super::contents::{File, IncludedFiles};
+use crate::chm::utilities::MakeAbsolute;
+use std::path::Path;
 
 /// The TOC for the CHM file.
 #[derive(Debug, Clone)]
@@ -18,6 +21,14 @@ impl ChmContents {
         r#"    <param name="Window Styles" value="0x800025">"#,
         r#"</OBJECT>"#,
     );
+
+    pub fn flatten(mut self) -> Vec<ChmContentsEntry> {
+        let mut result = vec![];
+        for entry in self.0.drain(..) {
+            result.extend(entry.flatten());
+        }
+        result
+    }
 }
 impl std::fmt::Display for ChmContents {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -45,8 +56,23 @@ pub struct ChmContentsEntry {
     pub file: String,
 
     pub children: Vec<ChmContentsEntry>,
+    pub files: Vec<File>,
 }
 impl ChmContentsEntry {
+    pub fn new(title: impl ToString, source: impl AsRef<Path>) -> std::io::Result<Self> {
+        let mut files = IncludedFiles::new();
+        files.add_file(source)?;
+
+        let own_path = &files.files.last().unwrap().path;
+        Ok(Self {
+            title: title.to_string(),
+            file: own_path.to_windows_path(),
+
+            children: vec![],
+            files: files.files.into_iter().collect(),
+        })
+    }
+
     /// Format the entry as a string.
     pub(crate) fn format(&self, depth: usize) -> String {
         let tabs = "\t".repeat(depth);

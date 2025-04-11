@@ -2,8 +2,7 @@
 //! It specifies the files to be included in the help file, the title of the help file,
 //! and other settings such as the default window size and the location of the table of contents and index files.
 //!
-use crate::ChmLanguage;
-use std::path::Path;
+use super::language::ChmLanguage;
 
 #[derive(Debug, Clone)]
 pub struct ChmProject {
@@ -14,7 +13,7 @@ pub struct ChmProject {
     pub index_path: String,
     pub contents_path: String,
 
-    pub files: Vec<String>,
+    pub default_file: String,
 }
 impl std::fmt::Display for ChmProject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -23,21 +22,7 @@ impl std::fmt::Display for ChmProject {
         let output_path = &self.output_path;
         let index_path = &self.index_path;
         let contents_path = &self.contents_path;
-        let files = &self.files.join("\n");
-
-        // Remove the file name from the output path
-        let default_file = if let Some(file) = self.files.first() {
-            let path = Path::new(file);
-            if let Some(parent) = Path::new(output_path).parent() {
-                path.strip_prefix(parent).unwrap_or(path)
-            } else {
-                path
-            }
-            .to_string_lossy()
-            .to_string()
-        } else {
-            String::new()
-        };
+        let default_file = &self.default_file;
 
         write!(
             f,
@@ -57,17 +42,15 @@ impl std::fmt::Display for ChmProject {
                 "\n",
                 "\n",
                 "[FILES]\n",
-                "{files}\n",
                 "\n",
                 "[INFOTYPES]"
             ),
             output_path = output_path,
             contents_path = contents_path,
             index_path = index_path,
-            default_file = default_file,
             language = language,
             title = title,
-            files = files,
+            default_file = default_file,
         )
     }
 }
