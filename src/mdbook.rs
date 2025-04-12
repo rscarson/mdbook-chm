@@ -1,8 +1,12 @@
-use crate::chm::{ChmBuilder, ChmTopicBuilder, language::ChmLanguage, utilities::MakeAbsolute};
+//! The mdbook part of this mdbook crate
+//! 
+//! Contains a trait that lets you get CHM out of a mdbook context
+use crate::chm::{ChmBuilder, ChmTopicBuilder, ChmLanguage, utilities::MakeAbsolute};
 use mdbook::{BookItem, renderer::RenderContext};
 use std::{collections::HashSet, path::Path};
 
 /// Get the current context from the command line arguments.
+#[must_use]
 pub fn context() -> Option<RenderContext> {
     let ctx = RenderContext::from_json(&mut std::io::stdin()).ok();
 
@@ -18,9 +22,19 @@ pub fn context() -> Option<RenderContext> {
 
 /// Trait to convert the current context to a CHM builder.
 pub trait MdBookChm {
+    /// Get the current configuration options (default if unspecified)
     fn chm_config(&self) -> MdbookChmConfig;
 
+    /// Return all chapters as chm topics that can be added to a CHM project
+    /// 
+    /// # Errors
+    /// Will return an error if any files included or referenced cannot be read
     fn topics(&self) -> std::io::Result<Vec<ChmTopicBuilder>>;
+
+    /// Return the entire book and all content as a CHM project
+    /// 
+    /// # Errors
+    /// Will return an error if any files included or referenced cannot be read
     fn as_chm(&self) -> std::io::Result<ChmBuilder>;
 }
 impl MdBookChm for RenderContext {
@@ -51,8 +65,7 @@ impl MdBookChm for RenderContext {
 
         //
         // Get language for the output
-        let lang_code = config.language_code.to_lowercase();
-        let lang = ChmLanguage::from_code(&lang_code).unwrap_or_default();
+        let lang = ChmLanguage::from_code(&config.language_code).unwrap_or_default();
 
         //
         // Get path definitions
@@ -64,7 +77,7 @@ impl MdBookChm for RenderContext {
         //
         // Add topics
         for topic in self.topics()? {
-            builder = builder.with_contents(topic)?;
+            builder.with_contents(topic);
         }
 
         Ok(builder)
@@ -120,6 +133,7 @@ impl AsTopic for mdbook::BookItem {
     }
 }
 
+/// Configuration structure for the rendering
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct MdbookChmConfig {

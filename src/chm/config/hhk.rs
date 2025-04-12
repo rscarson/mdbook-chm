@@ -1,10 +1,11 @@
 //! The index (.hhk) file is an HTML file that contains the index entries (keywords) for your index.
 //! When a user opens the index in a compiled help file, or on a Web page, and clicks a keyword, the HTML file associated with the keyword will open.
 
+/// The index for the CHM project
 #[derive(Debug, Clone)]
 pub struct ChmIndex(pub Vec<ChmIndexEntry>);
 impl ChmIndex {
-    pub const HEADER: &'static str = concat!(
+    const HEADER: &'static str = concat!(
         r#"<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">"#,
         r#"<HTML>"#,
         r#"<HEAD>"#,
@@ -35,9 +36,13 @@ impl std::fmt::Display for ChmIndex {
     }
 }
 
+/// A single entry in the index
 #[derive(Debug, Clone)]
 pub struct ChmIndexEntry {
+    /// Keyword to display
     pub keyword: String,
+
+    /// Path for the keyword
     pub file: String,
 }
 impl std::fmt::Display for ChmIndexEntry {

@@ -5,19 +5,28 @@ use super::utilities::{MakeAbsolute, SafeWrite, escape_html, find_compiler};
 use std::path::{Path, PathBuf};
 
 pub mod contents;
+
 pub mod hhc;
 pub mod hhk;
 pub mod hhp;
-pub mod language;
 
+mod language;
+pub use language::ChmLanguage;
+
+/// Allows for simplified creation of a CHM project and dependencies
+/// 
+/// Manages file conversions, dependencies, encoding issues, and write-out to the working dir
 #[derive(Debug, Clone)]
 pub struct ChmBuilder {
-    pub project: hhp::ChmProject,
-    pub contents: hhc::ChmContents,
-    pub project_path: PathBuf,
-    pub working_dir: PathBuf,
+    project: hhp::ChmProject,
+    contents: hhc::ChmContents,
+    project_path: PathBuf,
+    working_dir: PathBuf,
 }
 impl ChmBuilder {
+    /// Create a new CHM builder
+    /// 
+    /// Requires the book title, requested language code, and path to put the output files
     pub fn new(
         title: impl AsRef<str>,
         language: language::ChmLanguage,
@@ -51,7 +60,7 @@ impl ChmBuilder {
 
     /// Include a topic in the CHM file.  
     /// Topics can nest deeply.
-    pub fn with_contents(mut self, topic: ChmTopicBuilder) -> std::io::Result<Self> {
+    pub fn with_contents(&mut self, topic: ChmTopicBuilder) -> &mut Self {
         if self.project.default_file.is_empty() {
             if let Some(last) = topic.0.files.last() {
                 self.project.default_file = last.path.to_windows_path();
@@ -59,11 +68,14 @@ impl ChmBuilder {
         }
 
         self.contents.0.push(topic.0);
-        Ok(self)
+        self
     }
 
     /// Writes the CHM project component files to the specified output paths.  
     /// Does NOT compile the CHM file.
+    /// 
+    /// # Errors
+    /// Can return an error if output writes fail
     pub fn write(&self) -> std::io::Result<()> {
         //
         // Write project file
@@ -115,6 +127,9 @@ impl ChmBuilder {
     }
 
     /// Writes the CHM project component files to the specified output paths and compiles the CHM file.
+    /// 
+    /// # Errors
+    /// Can return an error if the compiler cannot be located, or on IO errors, or if compilation fails
     pub fn compile(self) -> std::io::Result<()> {
         self.write()?;
         let compiler_path = find_compiler()
@@ -130,16 +145,33 @@ impl ChmBuilder {
     }
 }
 
+/// Create a CHM topic (chapter) based on an input file.
+/// 
+/// Will pull any dependencies (images, stylesheets, etc),
+/// 
+/// And convert compatible files to HTML. See [`crate::chm::inputs`] for the list of formats supported
 #[derive(Debug, Clone)]
-pub struct ChmTopicBuilder(hhc::ChmContentsEntry);
+pub struct ChmTopicBuilder(ChmContentsEntry);
 impl ChmTopicBuilder {
-    pub fn new(title: impl ToString, file: impl AsRef<Path>) -> std::io::Result<Self> {
+    /// Build a topic based on a file
+    /// 
+    /// # Errors
+    /// Will return an error on IO failures, or if the file references dead images
+    pub fn new(title: &impl ToString, file: impl AsRef<Path>) -> std::io::Result<Self> {
         let topic = ChmContentsEntry::new(title, file)?;
         Ok(Self(topic))
     }
 
+    /// Add a subtopic to this topic
+    /// 
+    /// See [`ChmTopicBuilder::new`]
     pub fn with_child(&mut self, child: ChmTopicBuilder) -> &mut Self {
         self.0.children.push(child.0);
         self
+    }
+}
+impl From<ChmTopicBuilder> for ChmContentsEntry {
+    fn from(value: ChmTopicBuilder) -> Self {
+        value.0
     }
 }

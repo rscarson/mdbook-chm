@@ -4,15 +4,25 @@
 //!
 use super::language::ChmLanguage;
 
+/// The CHM project file, which ties the whole room together
 #[derive(Debug, Clone)]
 pub struct ChmProject {
+    /// Book title
     pub title: String,
+
+    /// Language code to display
     pub language: ChmLanguage,
 
+    /// Path for the resulting chm
     pub output_path: String,
+
+    /// Path to the index file
     pub index_path: String,
+
+    /// Path to the contents file
     pub contents_path: String,
 
+    /// Default file when opening
     pub default_file: String,
 }
 impl std::fmt::Display for ChmProject {

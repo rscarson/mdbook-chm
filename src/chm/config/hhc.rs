@@ -8,7 +8,7 @@ use std::path::Path;
 #[derive(Debug, Clone)]
 pub struct ChmContents(pub Vec<ChmContentsEntry>);
 impl ChmContents {
-    pub const HEADER: &'static str = concat!(
+    const HEADER: &'static str = concat!(
         r#"<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">"#,
         r#"<HTML>"#,
         r#"<HEAD>"#,
@@ -22,6 +22,10 @@ impl ChmContents {
         r#"</OBJECT>"#,
     );
 
+    /// Flatten this object into a list of entries instead of a tree
+    /// 
+    /// This is used to turn it into an index, or list dependencies for the tree
+    #[must_use]
     pub fn flatten(mut self) -> Vec<ChmContentsEntry> {
         let mut result = vec![];
         for entry in self.0.drain(..) {
@@ -52,18 +56,31 @@ impl std::fmt::Display for ChmContents {
 /// A directory tree structure for the table of contents.
 #[derive(Debug, Clone)]
 pub struct ChmContentsEntry {
+    /// The title of the chapter
     pub title: String,
+
+    /// The path to the chapter contents
     pub file: String,
 
+    /// Child topics
     pub children: Vec<ChmContentsEntry>,
+
+    /// All included files for this chapter (not the children)
     pub files: Vec<File>,
 }
 impl ChmContentsEntry {
-    pub fn new(title: impl ToString, source: impl AsRef<Path>) -> std::io::Result<Self> {
+    /// Create a new entry based on a source file, and process dependencies
+    /// 
+    /// # Errors
+    /// Can return an error on IO failures
+    /// 
+    /// # Panics
+    /// dont worry 'bout it kay? 
+    pub fn new(title: &impl ToString, source: impl AsRef<Path>) -> std::io::Result<Self> {
         let mut files = IncludedFiles::new();
         files.add_file(source)?;
 
-        let own_path = &files.files.last().unwrap().path;
+        let own_path = &files.files.last().expect("We literally just added it").path;
         Ok(Self {
             title: title.to_string(),
             file: own_path.to_windows_path(),
@@ -95,6 +112,9 @@ impl ChmContentsEntry {
     }
 
     /// Flattens the tree structure into a vector of entries.
+    /// 
+    /// This is used to turn it into an index, or list dependencies for the tree
+    #[must_use]
     pub fn flatten(mut self) -> Vec<Self> {
         let mut result = vec![];
         for child in self.children.drain(..) {
