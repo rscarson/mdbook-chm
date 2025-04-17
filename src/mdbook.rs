@@ -1,23 +1,43 @@
 //! The mdbook part of this mdbook crate
-//! 
+//!
 //! Contains a trait that lets you get CHM out of a mdbook context
-use crate::chm::{ChmBuilder, ChmTopicBuilder, ChmLanguage, utilities::MakeAbsolute};
-use mdbook::{BookItem, renderer::RenderContext};
+use crate::chm::{ChmBuilder, ChmLanguage, ChmTopicBuilder, utilities::MakeAbsolute};
+use mdbook::{
+    BookItem,
+    preprocess::{LinkPreprocessor, Preprocessor, PreprocessorContext},
+    renderer::RenderContext,
+};
 use std::{collections::HashSet, path::Path};
 
 /// Get the current context from the command line arguments.
 #[must_use]
 pub fn context() -> Option<RenderContext> {
-    let ctx = RenderContext::from_json(&mut std::io::stdin()).ok();
+    let mut ctx = RenderContext::from_json(&mut std::io::stdin()).ok()?;
 
     //
     // Set working directory to the book root
-    if let Some(ctx) = &ctx {
-        let book_root = ctx.root.clone();
-        std::env::set_current_dir(&book_root).ok()?;
-    }
+    let book_root = ctx.root.clone();
+    std::env::set_current_dir(&book_root).ok()?;
 
-    ctx
+    //
+    // Run pre-processors on the book
+    println!("Running pre-processors on book...");
+    let mut ppcontext = serde_json::to_value(&ctx).unwrap();
+    if let serde_json::Value::Object(ref mut obj) = ppcontext {
+        obj.insert(
+            "renderer".to_string(),
+            serde_json::Value::String(env!("CARGO_PKG_NAME").to_string()),
+        );
+        obj.insert(
+            "mdbook_version".to_string(),
+            serde_json::Value::String("0.4.48".to_string()),
+        );
+    }
+    let ppcontext: PreprocessorContext = serde_json::from_str(&ppcontext.to_string()).unwrap();
+    let link_pp = LinkPreprocessor::new();
+    ctx.book = link_pp.run(&ppcontext, ctx.book.clone()).ok()?;
+
+    Some(ctx)
 }
 
 /// Trait to convert the current context to a CHM builder.
@@ -26,13 +46,13 @@ pub trait MdBookChm {
     fn chm_config(&self) -> MdbookChmConfig;
 
     /// Return all chapters as chm topics that can be added to a CHM project
-    /// 
+    ///
     /// # Errors
     /// Will return an error if any files included or referenced cannot be read
     fn topics(&self) -> std::io::Result<Vec<ChmTopicBuilder>>;
 
     /// Return the entire book and all content as a CHM project
-    /// 
+    ///
     /// # Errors
     /// Will return an error if any files included or referenced cannot be read
     fn as_chm(&self) -> std::io::Result<ChmBuilder>;
@@ -109,9 +129,10 @@ impl AsTopic for mdbook::BookItem {
 
         println!("Adding topic: {}", chapter_path.display());
 
-        let mut topic = match ChmTopicBuilder::new(
+        let mut topic = match ChmTopicBuilder::new_with_content(
             &chapter.name,
             Path::new("src").join(chapter_path.to_windows_path()),
+            &chapter.content,
         ) {
             Ok(topic) => topic,
             Err(e) => return Some(Err(e)),

@@ -1,6 +1,8 @@
 use hhc::ChmContentsEntry;
 use hhk::{ChmIndex, ChmIndexEntry};
 
+use crate::chm::keyworder::Keyworder;
+
 use super::utilities::{MakeAbsolute, SafeWrite, escape_html, find_compiler};
 use std::path::{Path, PathBuf};
 
@@ -14,7 +16,7 @@ mod language;
 pub use language::ChmLanguage;
 
 /// Allows for simplified creation of a CHM project and dependencies
-/// 
+///
 /// Manages file conversions, dependencies, encoding issues, and write-out to the working dir
 #[derive(Debug, Clone)]
 pub struct ChmBuilder {
@@ -25,7 +27,7 @@ pub struct ChmBuilder {
 }
 impl ChmBuilder {
     /// Create a new CHM builder
-    /// 
+    ///
     /// Requires the book title, requested language code, and path to put the output files
     pub fn new(
         title: impl AsRef<str>,
@@ -73,7 +75,7 @@ impl ChmBuilder {
 
     /// Writes the CHM project component files to the specified output paths.  
     /// Does NOT compile the CHM file.
-    /// 
+    ///
     /// # Errors
     /// Can return an error if output writes fail
     pub fn write(&self) -> std::io::Result<()> {
@@ -94,7 +96,7 @@ impl ChmBuilder {
         //
         // Flatten TOC to finish building the project files
         let flat_map = self.contents.clone().flatten();
-        let index = ChmIndex(
+        let mut index = ChmIndex(
             flat_map
                 .iter()
                 .map(|entry| ChmIndexEntry {
@@ -109,9 +111,28 @@ impl ChmBuilder {
             .collect::<Vec<_>>();
 
         //
+        // Enhance the index with extra keywords
+        println!("Extracting keywords from files...");
+        let mut keyworder = Keyworder::new();
+        for entry in &files {
+            if let Some(str) = entry.str_contents() {
+                keyworder.process(&entry.path, str);
+            }
+        }
+        for keyword in keyworder.visible_keywords() {
+            for path in &keyword.seen_in {
+                let path = path.to_string_lossy();
+                index.0.push(ChmIndexEntry {
+                    keyword: escape_html(keyword.keyword),
+                    file: escape_html(path.as_ref()),
+                });
+            }
+        }
+
+        //
         // Write index
         let index_path = PathBuf::from(self.project.index_path.clone());
-        let index = String::new();// index.to_string();
+        let index = index.to_string();
         println!("Writing {}", index_path.display());
         index_path.safe_write(index.as_bytes())?;
 
@@ -119,7 +140,6 @@ impl ChmBuilder {
         // Write dependencies
         for file in &files {
             let target_path = self.working_dir.join(&file.path);
-            println!("Writing {}", target_path.display());
             target_path.safe_write(&file.contents)?;
         }
 
@@ -127,7 +147,7 @@ impl ChmBuilder {
     }
 
     /// Writes the CHM project component files to the specified output paths and compiles the CHM file.
-    /// 
+    ///
     /// # Errors
     /// Can return an error if the compiler cannot be located, or on IO errors, or if compilation fails
     pub fn compile(self) -> std::io::Result<()> {
@@ -146,15 +166,15 @@ impl ChmBuilder {
 }
 
 /// Create a CHM topic (chapter) based on an input file.
-/// 
+///
 /// Will pull any dependencies (images, stylesheets, etc),
-/// 
+///
 /// And convert compatible files to HTML. See [`crate::chm::inputs`] for the list of formats supported
 #[derive(Debug, Clone)]
 pub struct ChmTopicBuilder(ChmContentsEntry);
 impl ChmTopicBuilder {
     /// Build a topic based on a file
-    /// 
+    ///
     /// # Errors
     /// Will return an error on IO failures, or if the file references dead images
     pub fn new(title: &impl ToString, file: impl AsRef<Path>) -> std::io::Result<Self> {
@@ -162,8 +182,21 @@ impl ChmTopicBuilder {
         Ok(Self(topic))
     }
 
+    /// Build a topic based on a file
+    ///
+    /// # Errors
+    /// Will return an error on IO failures, or if the file references dead images
+    pub fn new_with_content(
+        title: &impl ToString,
+        file: impl AsRef<Path>,
+        content: &str,
+    ) -> std::io::Result<Self> {
+        let topic = ChmContentsEntry::with_contents(title, file, content)?;
+        Ok(Self(topic))
+    }
+
     /// Add a subtopic to this topic
-    /// 
+    ///
     /// See [`ChmTopicBuilder::new`]
     pub fn with_child(&mut self, child: ChmTopicBuilder) -> &mut Self {
         self.0.children.push(child.0);

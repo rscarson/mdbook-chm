@@ -1,7 +1,7 @@
 //! Module for managing dependencies
-//! 
+//!
 //! Reads and stores files, converts docs to HTML
-use crate::chm::{inputs::md_load, utilities::MakeAbsolute};
+use crate::chm::inputs::md_load;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -27,25 +27,16 @@ impl IncludedFiles {
     }
 
     /// Adds a file to the list of included files, and processes it if it is an HTML file.
-    /// 
+    ///
     /// # Errors
     /// Will pass down IO errors
     #[allow(clippy::single_match_else)]
-    pub fn add_file(&mut self, path: impl AsRef<Path>) -> std::io::Result<()> {
+    pub fn add_file(&mut self, path: impl AsRef<Path>, contents: &[u8]) -> std::io::Result<()> {
         let src_path = path.as_ref();
-        println!("Processing `{}`", src_path.make_absolute().display());
-
-        //
-        // Make sure the path is valid
-        if src_path.is_dir() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("Path is a directory: {}", src_path.display()),
-            ));
-        }
+        println!("Processing `{}`", src_path.display());
 
         let (file, dependencies) = match src_path.extension().and_then(OsStr::to_str) {
-            Some("md") => md_load(src_path)?,
+            Some("md") => md_load(src_path, contents)?,
             _ => {
                 let file = File {
                     path: src_path.to_path_buf(),
@@ -56,7 +47,8 @@ impl IncludedFiles {
         };
 
         for dependency in dependencies {
-            self.add_file(dependency)?;
+            let contents = std::fs::read(&dependency)?;
+            self.add_file(dependency, &contents)?;
         }
 
         self.files.push(file);
@@ -82,5 +74,15 @@ impl File {
     /// Returns true if this file is an HTML document
     pub fn is_html(&self) -> bool {
         self.path.extension().and_then(OsStr::to_str) == Some("html")
+    }
+
+    /// Attempts to convert the contents to a UTF-8 string.
+    #[must_use]
+    pub fn str_contents(&self) -> Option<&str> {
+        if self.is_html() {
+            std::str::from_utf8(&self.contents).ok()
+        } else {
+            None
+        }
     }
 }

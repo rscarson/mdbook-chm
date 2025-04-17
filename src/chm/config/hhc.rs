@@ -23,7 +23,7 @@ impl ChmContents {
     );
 
     /// Flatten this object into a list of entries instead of a tree
-    /// 
+    ///
     /// This is used to turn it into an index, or list dependencies for the tree
     #[must_use]
     pub fn flatten(mut self) -> Vec<ChmContentsEntry> {
@@ -70,15 +70,27 @@ pub struct ChmContentsEntry {
 }
 impl ChmContentsEntry {
     /// Create a new entry based on a source file, and process dependencies
-    /// 
+    ///
     /// # Errors
     /// Can return an error on IO failures
-    /// 
-    /// # Panics
-    /// dont worry 'bout it kay? 
     pub fn new(title: &impl ToString, source: impl AsRef<Path>) -> std::io::Result<Self> {
+        let contents = std::fs::read_to_string(source.as_ref())?;
+        Self::with_contents(title, source, &contents)
+    }
+    /// Create a new entry based on a source file and contents, and process dependencies
+    ///
+    /// # Errors
+    /// Can return an error on IO failures
+    ///
+    /// # Panics
+    /// dont worry 'bout it kay?
+    pub fn with_contents(
+        title: &impl ToString,
+        source: impl AsRef<Path>,
+        contents: &str,
+    ) -> std::io::Result<Self> {
         let mut files = IncludedFiles::new();
-        files.add_file(source)?;
+        files.add_file(source, contents.as_bytes())?;
 
         let own_path = &files.files.last().expect("We literally just added it").path;
         Ok(Self {
@@ -112,7 +124,7 @@ impl ChmContentsEntry {
     }
 
     /// Flattens the tree structure into a vector of entries.
-    /// 
+    ///
     /// This is used to turn it into an index, or list dependencies for the tree
     #[must_use]
     pub fn flatten(mut self) -> Vec<Self> {

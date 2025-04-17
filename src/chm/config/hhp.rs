@@ -43,7 +43,7 @@ impl std::fmt::Display for ChmProject {
                 "Compiled file={output_path}\n",
                 "Contents file={contents_path}\n",
                 "Default topic={default_file}\n",
-                "Display compile progress=Yes\n",
+                "Display compile progress=No\n",
                 "Enhanced decompilation=Yes\n",
                 "Full-text search=Yes\n",
                 "Index file={index_path}\n",

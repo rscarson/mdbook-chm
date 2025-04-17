@@ -1,14 +1,19 @@
-use std::{io::BufWriter, path::{Path, PathBuf}};
-use comrak::{nodes::NodeValue, Arena, ComrakOptions, ExtensionOptions};
 use crate::chm::contents::File;
+use comrak::{Arena, ComrakOptions, ExtensionOptions, nodes::NodeValue};
+use std::{
+    io::BufWriter,
+    path::{Path, PathBuf},
+};
 
 /// Loads a mardown file, rendering it as HTML
-/// 
+///
 /// # Errors
 /// Can return an error if the source cannot be read
-pub fn load(path: &Path) -> std::io::Result<(File, Vec<PathBuf>)> {
+pub fn load(path: &Path, contents: &[u8]) -> std::io::Result<(File, Vec<PathBuf>)> {
+    // Convert the contents to a string
+    let contents = String::from_utf8_lossy(contents).to_string();
+
     let mut options = ComrakOptions::default();
-    let contents = std::fs::read_to_string(path)?;
 
     //
     // Enable a shitload of options
@@ -42,11 +47,6 @@ pub fn load(path: &Path) -> std::io::Result<(File, Vec<PathBuf>)> {
     let contents = contents.replace(">\n", ">  \n");
 
     //
-    // And the `{{#include PATH}} syntax
-    // Use regex to find em all, read the files and inline them
-    let contents = preprocess_includes(&contents, path)?;
-
-    //
     // Parse the contents
     let arena = Arena::new();
     let root = comrak::parse_document(&arena, &contents, &options);
@@ -72,7 +72,6 @@ pub fn load(path: &Path) -> std::io::Result<(File, Vec<PathBuf>)> {
 
             dependencies.push(img_path);
         }
-        
 
         //
         // We also need to set the extension of all links pointing to relative .md files to .html
@@ -97,39 +96,10 @@ pub fn load(path: &Path) -> std::io::Result<(File, Vec<PathBuf>)> {
     // Return the html contents
     let own_file = File {
         path: path.with_extension("html"),
-        contents: html.as_bytes().to_vec()
+        contents: html.as_bytes().to_vec(),
     };
     Ok((own_file, dependencies))
 }
-
-fn preprocess_includes(contents: &str, parent_path: &Path) -> std::io::Result<String> {
-    // Regex to match the include syntax: {{#include PATH}}
-    let re = regex::Regex::new(r"\{\{#include\s+([^}]+)\}\}").unwrap();
-    
-    let mut modified_contents = contents.to_string();
-    
-    // Iterate over each match and replace the include directive with file content
-    for capture in re.captures_iter(contents) {
-        if let Some(path) = capture.get(1) {
-            let file_path = path.as_str().trim();
-            let mut file_path = Path::new(file_path).to_path_buf();
-            if file_path.is_relative() {
-                if let Some(parent) = parent_path.parent() {
-                    file_path = parent.join(file_path);
-                }
-            }
-
-            println!("Processing #include: {}", file_path.display());
-
-            // Read the contents of the file specified by the include directive
-            let contents = std::fs::read_to_string(file_path)?;
-            modified_contents = modified_contents.replace(capture.get(0).unwrap().as_str(), &contents);
-        }
-    }
-
-    Ok(modified_contents)
-}
-
 
 const HTML_TEMPLATE: &str = r#"
 <!DOCTYPE html>
