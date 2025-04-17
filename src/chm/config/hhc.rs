@@ -9,17 +9,17 @@ use std::path::Path;
 pub struct ChmContents(pub Vec<ChmContentsEntry>);
 impl ChmContents {
     const HEADER: &'static str = concat!(
-        r#"<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">"#,
-        r#"<HTML>"#,
-        r#"<HEAD>"#,
-        r#"<meta name="GENERATOR" content="@rscarson&reg; mdbook-chm">"#,
-        r#"<!-- Sitemap 1.0 -->"#,
-        r#"</HEAD><BODY>"#,
-        r#"<OBJECT type="text/site properties">"#,
-        r#"    <param name="Type" value=" ">"#,
-        r#"    <param name="TypeDesc" value=" ">"#,
-        r#"    <param name="Window Styles" value="0x800025">"#,
-        r#"</OBJECT>"#,
+        r#"<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">\n"#,
+        r#"<HTML>\n"#,
+        r#"<HEAD>\n"#,
+        r#"<meta name="GENERATOR" content="@rscarson&reg; mdbook-chm">\n"#,
+        r#"<!-- Sitemap 1.0 -->\n"#,
+        r#"</HEAD><BODY>\n"#,
+        r#"<OBJECT type="text/site properties">\n"#,
+        r#"    <param name="Type" value=" ">\n"#,
+        r#"    <param name="TypeDesc" value=" ">\n"#,
+        r#"    <param name="Window Styles" value="0x800025">\n"#,
+        r#"</OBJECT>\n"#,
     );
 
     /// Flatten this object into a list of entries instead of a tree

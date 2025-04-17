@@ -1,4 +1,4 @@
-use std::{io::BufWriter, path::Path};
+use std::{io::BufWriter, path::{Path, PathBuf}};
 use comrak::{nodes::NodeValue, Arena, ComrakOptions, ExtensionOptions};
 use crate::chm::contents::File;
 
@@ -6,14 +6,13 @@ use crate::chm::contents::File;
 /// 
 /// # Errors
 /// Can return an error if the source cannot be read
-pub fn load(path: &Path) -> std::io::Result<File> {
+pub fn load(path: &Path) -> std::io::Result<(File, Vec<PathBuf>)> {
     let mut options = ComrakOptions::default();
     let contents = std::fs::read_to_string(path)?;
 
     //
     // Enable a shitload of options
     options.render.unsafe_ = true;
-    options.render.hardbreaks = true;
     options.extension = ExtensionOptions {
         strikethrough: true,
         tagfilter: false,
@@ -38,40 +37,97 @@ pub fn load(path: &Path) -> std::io::Result<File> {
     };
 
     //
+    // A little preprocessing here
+    // Replace `>\n` with `>  \n`
+    let contents = contents.replace(">\n", ">  \n");
+
+    //
+    // And the `{{#include PATH}} syntax
+    // Use regex to find em all, read the files and inline them
+    let contents = preprocess_includes(&contents, path)?;
+
+    //
     // Parse the contents
     let arena = Arena::new();
     let root = comrak::parse_document(&arena, &contents, &options);
 
     //
-    // First get the html representation of the file
+    // We need to scan the tree and find all the images
+    let mut dependencies = vec![];
+    for node in root.descendants() {
+        if let NodeValue::Image(ref image) = node.data.borrow().value {
+            if image.url.starts_with("http") {
+                continue;
+            }
+
+            let mut img_path = Path::new(&image.url).to_path_buf();
+
+            //
+            // Possibly relative, set to parent of the current file
+            if img_path.is_relative() {
+                if let Some(parent) = path.parent() {
+                    img_path = parent.join(&img_path);
+                }
+            }
+
+            dependencies.push(img_path);
+        }
+        
+
+        //
+        // We also need to set the extension of all links pointing to relative .md files to .html
+        if let NodeValue::Link(ref mut link) = node.data.borrow_mut().value {
+            if !link.url.starts_with("http") {
+                let path = Path::new(&link.url);
+                if path.is_relative() {
+                    link.url = path.with_extension("html").to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+
+    //
+    // Get the html representation of the file
     let mut bw = BufWriter::new(Vec::new());
     comrak::format_html(root, &options, &mut bw)?;
     let html = String::from_utf8(bw.into_inner().unwrap_or_default()).unwrap_or_default();
     let html = HTML_TEMPLATE.replace("%BODY%", &html);
 
     //
-    // We need to scan the tree and find all the images
-    let mut images = vec![];
-    for node in root.descendants() {
-        if let NodeValue::Image(ref image) = node.data.borrow().value {
-            let mut path = Path::new(&image.url).to_path_buf();
+    // Return the html contents
+    let own_file = File {
+        path: path.with_extension("html"),
+        contents: html.as_bytes().to_vec()
+    };
+    Ok((own_file, dependencies))
+}
 
-            //
-            // Possibly relative, set to parent of the current file
-            if let Some(parent) = path.parent() {
-                path = parent.join(&path);
+fn preprocess_includes(contents: &str, parent_path: &Path) -> std::io::Result<String> {
+    // Regex to match the include syntax: {{#include PATH}}
+    let re = regex::Regex::new(r"\{\{#include\s+([^}]+)\}\}").unwrap();
+    
+    let mut modified_contents = contents.to_string();
+    
+    // Iterate over each match and replace the include directive with file content
+    for capture in re.captures_iter(contents) {
+        if let Some(path) = capture.get(1) {
+            let file_path = path.as_str().trim();
+            let mut file_path = Path::new(file_path).to_path_buf();
+            if file_path.is_relative() {
+                if let Some(parent) = parent_path.parent() {
+                    file_path = parent.join(file_path);
+                }
             }
 
-            images.push(path);
+            println!("Processing #include: {}", file_path.display());
+
+            // Read the contents of the file specified by the include directive
+            let contents = std::fs::read_to_string(file_path)?;
+            modified_contents = modified_contents.replace(capture.get(0).unwrap().as_str(), &contents);
         }
     }
 
-    //
-    // Return the html contents
-    Ok(File {
-        path: path.with_extension("html"),
-        contents: html.as_bytes().to_vec()
-    })
+    Ok(modified_contents)
 }
 
 
@@ -81,11 +137,7 @@ const HTML_TEMPLATE: &str = r#"
 <head>
     <meta name="GENERATOR" content="@rscarson® mdbook-chm">
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    
-    <title>%TITLE%</title>
-    
+    <meta charset="utf-8">    
     <style>
         body {
             font-family: "Segoe UI", Tahoma, sans-serif;

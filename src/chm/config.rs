@@ -111,7 +111,7 @@ impl ChmBuilder {
         //
         // Write index
         let index_path = PathBuf::from(self.project.index_path.clone());
-        let index = index.to_string();
+        let index = String::new();// index.to_string();
         println!("Writing {}", index_path.display());
         index_path.safe_write(index.as_bytes())?;
 

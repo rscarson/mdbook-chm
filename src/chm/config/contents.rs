@@ -30,6 +30,7 @@ impl IncludedFiles {
     /// 
     /// # Errors
     /// Will pass down IO errors
+    #[allow(clippy::single_match_else)]
     pub fn add_file(&mut self, path: impl AsRef<Path>) -> std::io::Result<()> {
         let src_path = path.as_ref();
         println!("Processing `{}`", src_path.make_absolute().display());
@@ -43,15 +44,22 @@ impl IncludedFiles {
             ));
         }
 
-        let file = match src_path.extension().and_then(OsStr::to_str) {
+        let (file, dependencies) = match src_path.extension().and_then(OsStr::to_str) {
             Some("md") => md_load(src_path)?,
-            _ => File {
-                path: src_path.to_path_buf(),
-                contents: std::fs::read(path)?,
+            _ => {
+                let file = File {
+                    path: src_path.to_path_buf(),
+                    contents: std::fs::read(path)?,
+                };
+                (file, vec![])
             }
         };
-        self.files.push(file);
 
+        for dependency in dependencies {
+            self.add_file(dependency)?;
+        }
+
+        self.files.push(file);
         Ok(())
     }
 

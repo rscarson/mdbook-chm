@@ -99,7 +99,7 @@ impl AsTopic for mdbook::BookItem {
             return None;
         };
 
-        let chapter_path = chapter.path.as_ref()?;
+        let chapter_path = chapter.source_path.as_ref()?;
 
         if visited_topics.contains(chapter_path.as_path()) {
             return None;
